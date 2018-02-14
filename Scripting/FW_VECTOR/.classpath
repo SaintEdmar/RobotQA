@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8"/>
+	<classpathentry kind="lib" path="D:/TestingQA/LibWebDriver_v2/jdbc-oracle.jar"/>
+	<classpathentry kind="lib" path="D:/TestingQA/LibWebDriver_v2/jt400-6.1.jar"/>
+	<classpathentry kind="lib" path="D:/TestingQA/LibWebDriver_v2/junit.jar"/>
+	<classpathentry kind="lib" path="D:/TestingQA/LibWebDriver_v2/jxl-2.6.12.jar"/>
+	<classpathentry kind="lib" path="D:/TestingQA/LibWebDriver_v2/jxl-2.6.jar"/>
+	<classpathentry kind="lib" path="D:/TestingQA/LibWebDriver_v2/selenium-html-runner-3.4.0.jar"/>
+	<classpathentry kind="lib" path="D:/TestingQA/LibWebDriver_v2/selenium-server-standalone-3.8.1.jar"/>
+	<classpathentry kind="lib" path="D:/TestingQA/LibWebDriver_v2/sqljdbc4-2.0.jar"/>
+	<classpathentry kind="lib" path="D:/TestingQA/LibWebDriver_v2/testng-6.9.4.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>

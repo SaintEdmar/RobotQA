@@ -1,0 +1,73 @@
+package ADMIN;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.interactions.Actions;
+////////////
+import java.io.FileInputStream;
+import jxl.Sheet;
+import jxl.Workbook;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.openqa.selenium.server.RemoteControlConfiguration;
+import org.openqa.selenium.server.SeleniumServer;
+import com.thoughtworks.selenium.*;
+import ADMIN.UtilsVector;
+////////////
+public class ClassMain {
+	  private WebDriver driver;
+	  private String baseUrl;
+	  private boolean acceptNextAlert = true;
+	  private StringBuffer verificationErrors = new StringBuffer();	  
+	  private UtilsVector utilsVector = new UtilsVector();
+	  @Before
+	  public void setUp() throws Exception {
+		RemoteControlConfiguration rc = new RemoteControlConfiguration();
+		rc.setSingleWindow(true);
+	    driver = new FirefoxDriver();
+	    Actions action = new Actions(driver);
+	    baseUrl = "http://172.22.1.6:8081";
+	    driver.manage().timeouts().implicitlyWait(1, TimeUnit.SECONDS);
+	    driver.manage().window().maximize();
+	  }
+	  @SuppressWarnings("null")
+	@Test
+	  public void testingQA() throws Exception {
+		   ///////////////////////Parameters///////////////////////////
+		    driver.get(baseUrl + "/Confirming/");
+		    String str_escenario = "CLIENTE_BANCO";
+		  	String str_escenario_D = str_escenario + "_D";
+		  	String str_escenario_P = str_escenario + "_P";
+		  	String str_objetos = "OBJETOS";
+		  	String nombre_datadriven = "DataDrivenCWEB.xls";
+		  	String file = "D:\\TestingQA\\";		  
+		  	Workbook workbook = utilsVector.coneccion(file + nombre_datadriven);
+		  	String[] object_P = utilsVector.map_pasos(workbook, str_escenario_P);		  	
+		  /////////////////////////////////////////////////////////////			
+		  	Sheet sDD=workbook.getSheet(str_escenario_D);
+		    for (int i = 1; i < sDD.getRows(); i++) {
+		    	utilsVector.valida_caso = true;
+		      	driver.get(baseUrl + "/Confirming/");
+		    	Sheet sPP=workbook.getSheet(str_escenario_P);
+		    	utilsVector.Cabecera_Casos(i);
+		    	for (int j = 1; j < sPP.getRows(); j ++) {	
+		    		String str_object_p = utilsVector.func_pasos(workbook, j, str_escenario_P, object_P[j]);
+		    		String[] pa = str_object_p.split("-");		    		  
+		    		String str_object_d = utilsVector.func_object(workbook, str_objetos, str_escenario_D, object_P[j]);		    		   		
+		    		String[] dd = str_object_d.split("-");
+		    		utilsVector.func_acccion(dd[0], pa[1], dd[1], sDD.getCell(Integer.parseInt(dd[2]), i).getContents(), driver);
+		    		if (utilsVector.valida_caso == false) {
+		    			break;
+		    		}
+		    	}	
+		    utilsVector.Valida_Caso(i);	
+		    }
+		    utilsVector.generar_evidencia(file,str_escenario);
+	}
+}

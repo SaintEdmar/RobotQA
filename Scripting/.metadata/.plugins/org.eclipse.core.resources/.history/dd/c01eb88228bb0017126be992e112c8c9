@@ -1,0 +1,1368 @@
+package MAIN;
+import java.awt.event.KeyEvent;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.sql.*;
+import org.apache.bcel.generic.SWITCH;
+import org.apache.commons.io.FileUtils;
+import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.Keys;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.ie.InternetExplorerDriver;
+import org.openqa.selenium.interactions.Actions;
+import org.openqa.selenium.remote.DesiredCapabilities;
+import org.openqa.selenium.support.ui.ExpectedCondition;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.Select;
+import org.openqa.selenium.support.ui.WebDriverWait;
+import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
+import com.microsoft.sqlserver.jdbc.SQLServerException;
+import com.microsoft.sqlserver.*;
+import java.awt.AWTException;
+import java.awt.Robot;
+import java.awt.event.KeyEvent;
+import jxl.Sheet;
+import jxl.Workbook;
+import jxl.read.biff.BiffException;
+@SuppressWarnings("unused")
+public class UtilsVector {
+public static void coneccion_db (String Str_BasedeDatos,String Str_Datapool,String Str_Servidor, String Str_Usuario ,String Str_Password) {
+	try {
+	switch (Str_BasedeDatos.toLowerCase())
+	{
+	 case "sql":
+		 	SQLServerDataSource sqlDs = new SQLServerDataSource();
+		 	sqlDs.setIntegratedSecurity(false);
+		 	sqlDs.setServerName(Str_Servidor); // Instancia
+		 	sqlDs.setDatabaseName(Str_Datapool);  //BD       
+		 	sqlDs.setUser(Str_Usuario);//usuario
+		 	sqlDs.setPassword(Str_Password);//clave usuario
+		 	sqlDs.setPortNumber(1433);
+	        try {
+	        	Variables.Cnn = sqlDs.getConnection();
+	        }
+	        catch (Exception e){
+	    		e.getMessage();
+	    		System.out.println(e.getMessage());
+	    	}
+	        break;
+	 case "":
+		 	break;
+	}
+	}
+	catch (Exception e){
+		e.getMessage();
+		System.out.println(e.getMessage());
+	}
+}
+public static void schedule(String Str_BasedeDatos,String Str_Datapool,String Str_Servidor, String Str_Usuario ,String Str_Password){
+	Variables.blnpendiente = false;
+	try {
+	java.net.InetAddress InfoSistema = java.net.InetAddress.getLocalHost();
+	Variables.P_Nombre_Maquina = InfoSistema.getHostName();
+	coneccion_db(Str_BasedeDatos, Str_Datapool, Str_Servidor, Str_Usuario, Str_Password);
+	Variables.Rst_Escenarios_Pendientes = Variables.Cnn.prepareCall("SELECT * FROM TBL_SCHEDULE WHERE EJECUTAR = 'TRUE' AND EJECUTADO = 'FALSE' AND upper(MAQUINA)='" + Variables.P_Nombre_Maquina.trim().toUpperCase() + "' ORDER BY FECHA_EJECUTAR, HORA_EJECUTAR, INDICE").executeQuery();
+	if (Variables.Rst_Escenarios_Pendientes.next()==true){
+		if (DateCompare(new Date(),Variables.Rst_Escenarios_Pendientes.getString("FECHA_EJECUTAR") + " " + Variables.Rst_Escenarios_Pendientes.getString("HORA_EJECUTAR")) == false){
+			Variables.blnpendiente = true;
+			Variables.dtFechaInicio = new Date();
+			Variables.Cnn.prepareCall("UPDATE TBL_SCHEDULE SET EJECUTADO = 'TRUE', FECHA_INICIO_EJECUTADO = '" + Variables.dtFechaInicio + "' WHERE INDICE = " + Variables.Rst_Escenarios_Pendientes.getString("INDICE")).execute();
+			//FUNCION PARA RETORNAR CASOS SELECCIONADOS DEL DATADRIVEN [FALTA IMPLEMENTAR]
+			Variables.S_Casos_Ejecutar = RetornarCasosEjecutarSchedule(Variables.Rst_Escenarios_Pendientes.getString("CASOS_EJECUTAR"), ",", "-");
+			Variables.web=Variables.Rst_Escenarios_Pendientes.getString("BROWSER");
+			Variables.S_Version = Variables.Rst_Escenarios_Pendientes.getString("VERSION");
+			Variables.S_Corrida = Variables.Rst_Escenarios_Pendientes.getString("CORRIDA");
+			Variables.S_Arquitecto_QA = Variables.Rst_Escenarios_Pendientes.getString("ARQUITECTO_QA");
+			Variables.bln_Captura_Total = Variables.Rst_Escenarios_Pendientes.getBoolean("CAPTURA_COMPLETA");
+		}else{
+			Variables.blnpendiente = false;
+		}
+	}else{
+		Variables.blnpendiente = false;
+	}
+	}
+	catch (Exception ex){
+		Variables.blnpendiente = false;
+		System.out.println("Error en Schedule: " + ex.getMessage());
+	}
+}
+public static void Inicializar_datadriven(){
+	if (!S_Casos_Ejecutar.equals("")) 
+    {
+    casos_ejecutar = " AND ID_CASO IN (" + S_Casos_Ejecutar + ") ";
+    }
+}
+public static void func_identificar_Script (String str_escenario) throws SQLException{
+	try {
+		Rst_Pasos_Read =  Cnn.prepareCall("SELECT * FROM " + str_escenario + "_P").executeQuery();
+	}
+	catch (Exception e){
+		System.out.println("Error al cargar la tabla de pasos" + e.getMessage());
+	}
+}
+public static void func_identificar_DataDriven (String str_escenario) throws SQLException{
+	try {
+		Rst_Datos_Read =  Cnn.prepareCall("SELECT * FROM " + str_escenario + "_D WHERE upper(ESTADO_CASO) = 'Activo'" + casos_ejecutar).executeQuery();
+	}
+	catch (Exception e){
+		System.out.println("Error al cargar la tabla de casos" + e.getMessage());
+	}
+}
+public static void func_identificar_Casos_DataDriven (){
+	try {
+		Rst_Datos =  Cnn.prepareCall("SELECT * FROM " + str_escenario + "_D WHERE upper(ESTADO_CASO) = 'Activo' ORDER BY ID_CASO").executeQuery();
+	}
+	catch (Exception e){
+		System.out.println("Error al cargar la tabla de casos del datadriven para generar evidencia" + e.getMessage());
+	}
+}
+public static void limpia_log_evidencia(String escenario, String caso){
+	try {
+		Cnn.prepareCall("DELETE FROM TBL_LOG_EVIDENCIA WHERE ESCENARIO='" + escenario + "' AND VERSION ='" + S_Version + "' AND CORRIDA='" + S_Corrida + "' AND ID_CASO='" + caso + "'").execute();
+	}catch (Exception e) {
+	        System.out.println("Fallo la eliminación en la tabla TBL_LOG_EVIDENCIA");
+	        System.out.println (e.getMessage());
+	}
+}
+public static String RetornarCasosEjecutarSchedule (String cadenaCasos, String separador_1, String separador_2){
+	String[] strAuxDato ;
+	String[] strAuxDatoSep2;
+	int x, y;
+	String tmpCasos = "";
+	String datoResult = "";
+	datoResult = cadenaCasos.trim();
+	if (datoResult.length() > 0)
+	{
+		strAuxDato = cadenaCasos.split(separador_1);
+		//Se recorre array principal ---> cadena separada por el separador 1
+		for(x = 0 ; x < strAuxDato.length ; x++)
+		{
+			//Sí se detecta el separador 2 se realiza generación de los índices de acuerdo al rango que está separado por el separador 2
+			if (strAuxDato[x].indexOf(separador_2) != -1 )
+			{
+				strAuxDatoSep2 = strAuxDato[x].trim().split(separador_2);
+				tmpCasos = "";
+					if (Integer.parseInt(strAuxDatoSep2[0]) <= Integer.parseInt(strAuxDatoSep2[1]) )   //Se valida que el rango superior no sea menor que el rango inferior.
+					//Se generan los índices puntuales que conforman el rango
+					{
+						for ( y = Integer.parseInt(strAuxDatoSep2[0]); y < Integer.parseInt(strAuxDatoSep2[1]); y++)
+						{
+							tmpCasos = tmpCasos + "," + Integer.toString(y);
+						}
+                    	tmpCasos = tmpCasos.substring(0, 3);
+					}	
+                    else
+                    {
+                    		tmpCasos = "0";
+                    }
+					datoResult = tmpCasos;
+			}
+            else {
+                    //Se valida que el caso separado no sea vacío.
+                    if ( strAuxDato[x].trim().length() == 0 ) 
+                    	datoResult = "0";
+             }
+		}    	
+	}
+	return datoResult;
+}
+public static void func_actualizar_estado_caso (String str_escenario, String caso){
+	try {
+	dtFechaInicioCaso = new Date();
+	Cnn.prepareStatement("UPDATE " + str_escenario + "_D SET ESTADO_EJECUCION='PROCESANDO', RESULTADO='', TIEMPO_EJECUCION='',FECHA_HORA_EJECUCION='" + dtFechaInicioCaso +"' WHERE upper(ESTADO_CASO) = 'Activo'  AND ID_CASO='" + caso + "'").executeUpdate();
+	}
+	catch (Exception e){
+		System.out.println(e.getMessage());
+	}
+}
+public static void orquestador(){
+	try {
+		str_escenario = Rst_Escenarios_Pendientes.getString("ESCENARIO");
+		Inicializar_datadriven();
+		func_identificar_DataDriven(str_escenario);		  	
+	  	String DEPURAR_EVD = "NO";
+     if (!DEPURAR_EVD.equals("SI")){
+    	 while (Rst_Datos_Read.next()==true){
+    		D_ID_CASO = Rst_Datos_Read.getString("ID_CASO");
+	    	limpia_log_evidencia(str_escenario,D_ID_CASO);
+	    	func_identificar_Script(str_escenario);
+	    	System.out.println("Iniciando caso [" + D_ID_CASO + "]");
+	    	Cabecera_Casos(D_ID_CASO);
+	    	func_actualizar_estado_caso(str_escenario,D_ID_CASO);
+	    	while (Rst_Pasos_Read.next()==true) { //INICIA LOS PASOS
+	    		P_ID_PASO = Rst_Pasos_Read.getString("ID_PASO");
+	    		System.out.println("Iniciando paso [" + P_ID_PASO + "]");	
+	    		P_Tipo_Paso="";
+	    		P_Paso="";
+	    		P_Object="";
+	    		P_Parametro_Adicional="";
+		    	P_Tipo_Paso = Rst_Pasos_Read.getString("TIPO_PASO");
+		    	P_Paso = Rst_Pasos_Read.getString("PASO");
+		    	P_Object = Rst_Pasos_Read.getString("OBJECT");
+		    	P_Parametro_Adicional = Rst_Pasos_Read.getString("PARAMETRO_ADICIONAL");
+	    		func_object_sql(str_escenario,P_Object);
+	    		O_Object_Name="";
+	    		O_Object_Ident="";
+	    		O_Tipo_Object_Ident="";
+	    		if (Rst_Objetos.next() == true){
+	    			O_Object_Name = Rst_Objetos.getString("OBJECT_NAME");
+	    			O_Object_Ident = Rst_Objetos.getString("OBJECT_IDENT");
+	    			O_Tipo_Object_Ident = Rst_Objetos.getString("TIPO_OBJECT_IDENT");
+	    		}
+	    		if (!P_Object.equals("")){
+	    			func_datadriven_sql(str_escenario, P_Object, D_ID_CASO);
+	    		}    		
+	    		D_Dato="";
+	    		if (Rst_Datos.next() == true){
+	    			D_Dato = Rst_Datos.getString(P_Object);
+	    		}
+	    		Cabecera_Pasos(P_ID_PASO);
+	    		System.out.println("Ingresando al Keyword");
+		        //utilsVector.keyword_Web(pa[0], pa[2], dd[0], pa[1], dd[1],pa[3], sDD.getCell(Integer.parseInt(dd[2]), i).getContents(), file, str_escenario, i, j, web, ruta);
+	    		keyword_Web(P_Tipo_Paso, P_Object, O_Object_Ident, P_Paso, O_Tipo_Object_Ident ,P_Parametro_Adicional,D_Dato, file, str_escenario,S_Version, S_Corrida, D_ID_CASO, P_ID_PASO, web, ruta);
+	    		if (bln_Captura_Total==true){
+	    			captura_evidencia(file, str_escenario,S_Version, S_Corrida, D_ID_CASO, P_ID_PASO);
+	    		}
+		    	System.out.println("Saliendo del Keyword");
+		    	System.out.println("VERIFICANDO SI EL PASO ES CORRECTO?");
+	    		if (valida_caso == false) {
+	    			System.out.println("El paso es INCORRECTO");
+	    			break;
+	    		}else{
+	    			System.out.println("El paso es CORRECTO");
+	    		}   				
+	    		System.out.println("Finalizando paso [" + P_ID_PASO + "]");    		
+	    	}
+	    Func_Valida_Caso(str_escenario, D_ID_CASO , P_ID_PASO);
+	    System.out.println("Finalizando caso [" + D_ID_CASO + "]");
+	    generar_evidencia_caso(file, str_escenario, D_ID_CASO);
+	    Rst_Pasos_Read.close(); //cerramos el recorset de pasos
+	    kill_procesos(web);
+	    }
+  	   } //FIN DEPURAR EVD
+	    generar_reporte_evidencia(file, str_escenario);	    	    
+	}
+	catch (Exception e) {	
+		System.out.println(e.getMessage());	
+	}
+}
+private static void func_guardar_contenido(String Origen, String Destino, String caso){
+	// INPUT:
+	// OBJECT = ORIGEN
+	// PARAMETRO_ADICIONAL = DESTINO
+	// 1 EJEMPLO: ACCION GUARDAR_CONTENIDO dto_NUMERO_COTIZACION    dt_NUMERO_COTIZACION
+	// 2 EJEMPLO: ACCION GUARDAR_CONTENIDO dt_NUMERO_COTIZACION     dt_NUMERO_COTIZACION_FINAL
+	try{
+		String Aux="";
+		String strSQLaux="";
+		WebElement StrWebElement;
+		ResultSet Rst_Select_Columna;
+		//INICIO 1 EJEMPLO
+		if (Origen.toLowerCase().startsWith("dto_")==true){
+			//CAPTURAR EL VALOR dto_NUMERO_COTIZACIÓN
+			func_object_sql(str_escenario,Origen.split("dto_")[1]);
+			O_Object_Name="";
+    		O_Object_Ident="";
+    		O_Tipo_Object_Ident="";
+    		if (Rst_Objetos.next() == true){
+    			O_Object_Name = Rst_Objetos.getString("OBJECT_NAME");
+    			O_Object_Ident = Rst_Objetos.getString("OBJECT_IDENT");
+    			O_Tipo_Object_Ident = Rst_Objetos.getString("TIPO_OBJECT_IDENT");
+    		}
+			StrWebElement = driver.findElement(obtenerObjeto(O_Object_Ident, O_Tipo_Object_Ident));
+			if(StrWebElement.getAttribute("readonly") != null && StrWebElement.getAttribute("readonly").equalsIgnoreCase("readonly")){
+				setAttribute("arguments[0].removeAttribute(arguments[1])",StrWebElement, "ReadOnly", "");
+				Aux = StrWebElement.getAttribute("value");
+				setAttribute("arguments[0].setAttribute(arguments[1], arguments[2])",StrWebElement ,"ReadOnly", "readonly");
+			}else if (StrWebElement.isEnabled()==false){
+				Aux = StrWebElement.getAttribute("value");
+			}else{
+				Aux = StrWebElement.getText();
+			}
+			//FIN
+			//GUARDAR EL VALOR en dt_NUMERO COTIZACIÓN
+		if (Destino.toLowerCase().startsWith("dt_")==true){		
+			strSQLaux = "UPDATE " + str_escenario + "_D SET " + Destino.split("dt_")[1] + " = '" + Aux + "' WHERE ID_CASO='" + caso + "'";
+			Cnn.prepareCall(strSQLaux).execute();
+		}
+			//FIN			
+		}else{
+		// FIN EJEMPLO 1
+		// INICIO EJEMPLO 2
+		if (Origen.toLowerCase().startsWith("dt_")==true){
+			strSQLaux = "SELECT " + Origen.split("dt_")[1] + " FROM " + str_escenario + "_D WHERE ID_CASO='" + caso + "'";
+			Rst_Select_Columna = Cnn.prepareCall(strSQLaux).executeQuery();
+			if (Rst_Select_Columna.next()==true){
+				Aux=Rst_Select_Columna.getString(Origen.split("dt_")[1]).toString();
+			}
+		}
+		if (Destino.toLowerCase().startsWith("dt_")==true)	{
+			strSQLaux = "UPDATE " + str_escenario + "_D SET " + Destino.split("dt_")[1] + " = '" + Aux + "' WHERE ID_CASO='" + caso + "'";
+			Cnn.prepareCall(strSQLaux).execute();
+		}
+		// FIN EJEMPLO 2
+		}
+	}
+	catch (Exception e){
+		System.out.println(e.getMessage());	
+	}
+}
+static void setAttribute(String Accion,WebElement element, String attributeName, String value) {
+    	JavascriptExecutor js = (JavascriptExecutor) driver;
+    	//Para hacer un Set a un atributo
+        //js.executeScript("arguments[0].setAttribute(arguments[1], arguments[2])", element, attributeName, value);
+    	//Para eliminar un atributo x completo
+    	if (value =="")
+    		js.executeScript(Accion, element, attributeName);
+    	else
+    		js.executeScript(Accion, element, attributeName, value);
+ }
+private static boolean DateCompare(Date date, String string) throws ParseException {
+	Date Date_Now = new Date();
+    SimpleDateFormat formatter = new SimpleDateFormat("dd/MM/yyyy hh:mm:ss");
+    Date Date_Ejecucion = date;
+    Date_Now = (Date)formatter.parse(string);
+    return Date_Now.after(Date_Ejecucion);
+}
+
+public static void func_object_sql (String escenario, String objeto) throws SQLException{
+	try {
+	Rst_Objetos =  Cnn.prepareCall("SELECT * FROM TBL_OBJETOS WHERE SCRIPT = '" + escenario + "' AND OBJECT_NAME = '" + objeto + "' AND SCRIPT='" + str_escenario + "'").executeQuery();
+	}
+	catch (Exception e){
+		System.out.println(e.getMessage());
+	}
+}
+public static void func_datadriven_sql (String str_escenario, String objeto, String caso) throws SQLException{
+	try{
+	Rst_Datos =  Cnn.prepareCall("SELECT " + objeto + " FROM " + str_escenario + "_D" + " WHERE ID_CASO='" + caso + "' AND upper(ESTADO_CASO) = 'Activo'").executeQuery();
+	}
+	catch (Exception e){
+		System.out.println(e.getMessage());
+	}
+}
+public static void keyword_Web (String str_tipo_paso, String str_object, String mapeo_objeto, String str_paso, String mapeo_tipo,String adicional,  String valor, String file, String escenario, String version, String corrida, String i, String j,String web, String ruta) {
+	try {
+	switch (str_tipo_paso.toUpperCase()) {
+	case "ACCION":
+			func_accion(str_object, mapeo_objeto, str_paso, mapeo_tipo, valor, adicional);
+			break;
+	case "REVISION":
+			func_revision(str_object,mapeo_objeto,str_paso, mapeo_tipo, valor, adicional);
+			break;
+	case "FUNCIONES":
+			func_funciones_nativas(str_paso,web, ruta, valor,str_object);
+			break;
+	case "VECTOR":
+			func_vector(str_paso,file, escenario, version, corrida, i , j);
+			break;
+	default:
+			break;
+	}
+	System.out.println("Valida Caso:" + valida_caso);
+	}
+	catch (Exception e) {
+		System.out.println(e.getMessage());
+		return;	
+	}
+}
+public static void func_espera_cargar (int parar) 
+{
+	try {
+		Thread.sleep(parar*1000);
+		} catch(InterruptedException e) {
+		}
+	System.out.println("Esperamos: " + parar +" .seg");
+}
+public static void func_funciones_nativas(String str_paso,String web, String ruta, String valor, String str_object){
+try{
+	switch (str_paso.toUpperCase()) {
+	case "OPEN_WINDOWS":
+		func_open_windows(web, ruta, valor);		
+		break;
+	//case "TECLA":
+	//	this.func_tecla_windows(str_object);
+	//	break;
+	//case "CLOSE_WINDOWS":
+	//	driver.close();
+	//	break;
+	}
+}
+catch (Exception e){
+	System.out.println(e.getMessage());
+	valida_caso = false;
+}
+}
+private static void func_tecla_windows(WebElement element,String Tecla) throws AWTException, InterruptedException {
+	switch (Tecla.toUpperCase()){
+		case "[ENTER]":
+			element.sendKeys(Keys.ENTER);
+			Thread.sleep(1000);
+			Variables.cadena_html = Variables.cadena_html + "TECLA " + Tecla.toUpperCase() + "|<br>";
+			break;
+		case "[TAB]":
+			element.sendKeys(Keys.TAB);
+			Thread.sleep(1000);
+			Variables.cadena_html = Variables.cadena_html + "TECLA " + Tecla.toUpperCase() + "|<br>";
+			break;
+		default:
+			break;
+	}
+}
+public static void func_revision (String Objeto, String mapeo_objeto, String tipo_accion, String mapeo_tipo,  String valor, String adicional) {
+	valida_caso = false;
+	WebDriverWait wait = new WebDriverWait(driver, 1);
+	try {			
+	switch (tipo_accion.toUpperCase()) {
+		case "HABILITADO":
+			highlightElement(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO		
+			driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).isEnabled();
+			Variables.cadena_html = Variables.cadena_html + "REVISIÓN: " + tipo_accion + " en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+			valida_caso = true;
+			break;
+		case "CONTIENE_TEXTO":
+			highlightElement(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO		
+			driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).getText().trim().contentEquals(valor);
+			Variables.cadena_html = Variables.cadena_html + "REVISIÓN: " + tipo_accion + " el valor '" + valor  + "' en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+			valida_caso = true;
+			break;
+		case "TEXTO":
+			highlightElement(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO		
+			driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).getText().trim().contains(valor);
+			Variables.cadena_html = Variables.cadena_html + "REVISIÓN: " + tipo_accion + " el valor '" + valor  + "' en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+			valida_caso = true;
+			break;
+		case "VISIBLE_OBJETO":
+			highlightElement(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO		
+			driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).isDisplayed();
+			Variables.cadena_html = Variables.cadena_html + "REVISIÓN: " + tipo_accion + " en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+			valida_caso = true;
+			break;
+		default:
+			break;
+		}
+	}
+	catch (Exception e) {
+		e.printStackTrace();
+		System.out.println(e.getMessage());		
+		Variables.cadena_html = Variables.cadena_html + "<font color='#FF0000'>ERROR EN EL PASO: " + "REVISIÓN: " + tipo_accion + " en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "| MENSAJE ERROR: " + e.getMessage() + "</font><br>";
+		valida_caso = false;	
+	}
+}
+public static void func_accion (String Objeto, String mapeo_objeto, String tipo_accion, String mapeo_tipo,  String valor, String adicional) {
+	valida_caso = false;
+	WebDriverWait wait = new WebDriverWait(driver, 1);
+	try {			
+	switch (tipo_accion.toUpperCase()) {
+	case "CLICK":
+			highlightElement(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO		
+			driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).click();
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + tipo_accion + " en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+			valida_caso=true;
+			break;
+	case "ESCRIBIR":
+			highlightElement(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO
+			driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).clear();
+			driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).sendKeys(valor);
+			if ((adicional!=null)){
+				if (adicional.equals("[ENTER]")){
+					driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).sendKeys(Keys.ENTER);
+				}
+				if (adicional.equals("[TAB]")){
+					driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).sendKeys(Keys.TAB);
+				}
+			}
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + tipo_accion + " el valor '" + valor  + "' en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+			valida_caso=true;
+			break;
+	case "DOBLECLICK":
+			highlightElement(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO
+			WebElement ee = driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo));
+		    Actions action = new Actions(driver);
+		    action.doubleClick(ee).perform();
+		    Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + tipo_accion + " en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+		    valida_caso=true;
+		    break;
+	case "LIMPIAR":
+			highlightElement(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO
+			driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).clear();
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + tipo_accion + " en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+			valida_caso=true;
+			break;
+	case "SELECCIONAR_TEXT":
+			highlightElement(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO
+			//driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).click();	
+			Select droplist = new Select(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)));   
+			droplist.selectByVisibleText(valor);
+			//dato = true;
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + tipo_accion + " el valor '" + valor  + "' en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+			valida_caso=true;
+			break;
+	case "SELECCIONAR_VALOR":
+		highlightElement(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO
+		//driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).click();	
+		Select droplist_v = new Select(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)));   
+		droplist_v.selectByValue(valor);
+		Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + tipo_accion + " el valor '" + valor  + "' en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+		valida_caso=true;
+		break;
+	case "SELECCIONAR_OPCION":
+			//driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).click();
+			highlightElement(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO
+			Thread.sleep(2000);
+			WebElement mySelectElm = driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo));
+			Select droplist1 = new Select(mySelectElm);	
+			Integer x = Integer.valueOf(valor);
+			droplist1.selectByIndex(x);
+			//dato = true;
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + tipo_accion + " en la posición [" + valor  + "] en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+			valida_caso=true;
+			break;
+	case "SELECCIONAR_FRAME":
+			driver.switchTo().frame(mapeo_objeto);
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + tipo_accion + " en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+			valida_caso=true;
+			break;
+	case "SELECCIONAR_WINDOW": //pendiente de estabilizar
+            //driver.switchTo().window(mapeo_objeto);
+			 for (String handle : driver.getWindowHandles()) {			 
+			    driver.switchTo().window(handle);}
+			//driver.manage().timeouts().wait(15);
+			//driver.manage().timeouts().pageLoadTimeout(Integer.parseInt(Objeto), TimeUnit.SECONDS);
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + tipo_accion + " en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+			valida_caso=true;
+			break;
+	case "ESPERA_CARGAR":
+			func_espera_cargar(Integer.parseInt(adicional));
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + "Esperando ... [" + Integer.parseInt(adicional) + " seg.]" + "|<br>";
+			valida_caso=true;
+			break;
+	case "ESPERA_OBJETO":
+			func_espera_elemento(mapeo_tipo, mapeo_objeto, adicional, driver);
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + "Esperando el objeto [" + Objeto + "] con tipo de mapeo [" + mapeo_tipo + "] e identificador [" + mapeo_objeto + "]|<br>";
+			valida_caso=true;
+			break;
+	case "ESPERA_TEXTO":
+			func_espera_texto(mapeo_objeto, adicional, driver);
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + "Esperando el texto [" + Objeto + "] con tipo de mapeo [" + mapeo_tipo + "] e identificador [" + mapeo_objeto + "]|<br>";
+			valida_caso=true;
+			break;
+	case "VISUALIZA_TEXTO":
+			func_visualizar_texto(mapeo_objeto, adicional, driver);
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + "Se visualiza el texto [" + Objeto + "] con tipo de mapeo [" + mapeo_tipo + "] e identificador [" + mapeo_objeto + "]|<br>";
+			valida_caso=true;
+			break;
+	case "ESPERAR_HABILITADO":
+			func_esperar_habilitado(mapeo_objeto,adicional,driver);
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + "Se espera el objeto [" + Objeto + "] con tipo de mapeo [" + mapeo_tipo + "] e identificador [" + mapeo_objeto + "]|<br>";
+			valida_caso=true;
+			break;
+	case "TECLA":
+			WebElement ElementoTecla = driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo));
+			func_tecla_windows(ElementoTecla,adicional);
+			valida_caso=true;
+	case "GUARDAR_CONTENIDO":
+			func_guardar_contenido(Objeto,adicional,D_ID_CASO);
+			Variables.cadena_html = Variables.cadena_html + "ACCIÓN: " + "Se guarda el contenido del Objeto [" + Objeto + "] en el destino [" + adicional + "]|<br>";
+			valida_caso=true;
+	default:
+			break;
+	}
+	}
+	catch (Exception e) {
+		System.out.println(e.getMessage());		
+		Variables.cadena_html = Variables.cadena_html + "<font color='#FF0000'>ERROR EN EL PASO: " + "ACCIÓN: " + tipo_accion + " en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "| MENSAJE ERROR: " + e.getMessage() + "</font><br>";
+		valida_caso = false;	
+	}
+}
+public static void func_esperar_habilitado (String mapeo_objeto, String tiempo, WebDriver driver) throws InterruptedException{
+	int cont=0;
+	while (driver.findElement(By.xpath(mapeo_objeto)).isEnabled()==false){
+		Thread.sleep(1000);
+		cont++;
+		System.out.println("Esperando: " + cont);
+		if (cont>Integer.parseInt(tiempo)){
+			System.out.println("Objeto NO visualizado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , en un máximo de: " + tiempo + " .seg");
+			Variables.cadena_html = Variables.cadena_html + "Objeto NO visualizado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , en un máximo de: " + tiempo + " .seg" + "|<br>";
+			valida_caso=false;
+			break;
+		}
+	}
+	System.out.println("Objeto visualizado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , por un período de: " + cont + " .seg");
+	Variables.cadena_html = Variables.cadena_html + "Objeto visualizado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , en un máximo de: " + cont + " .seg" + "|<br>";
+	valida_caso=true;
+}
+public static void func_espera_texto (String mapeo_objeto, String tiempo, WebDriver driver){
+	//"xpath=//*[contains(text(),'" + ValorParametro1 + "')]"'
+	//P[text()='Cargando cotizador... Espere por favor...']
+	int intentos = 0;    		
+	if(tiempo.equalsIgnoreCase(""))
+		tiempo="60";  	
+	System.out.println("Inicio buscando texto [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+	Variables.cadena_html = Variables.cadena_html + "Inicio buscando texto [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+	while(true){
+		if(mapeo_objeto != null){
+				try{
+	    					driver.findElement(By.xpath("//*[contains(text(),'" + mapeo_objeto + "')]"));
+	    					System.out.println("Texto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+	    					Variables.cadena_html = Variables.cadena_html + "Texto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+	    					valida_caso = true;			
+				}//return;	//el objeto ya está en la pantalla 
+        		catch(Throwable e){
+    	    			//no ha aparecido, sigue validando
+    	    		}
+    			}
+		if (valida_caso == true) {break;};
+		intentos++;
+		System.out.println("Esperando: " + intentos);
+		if(intentos >  Integer.parseInt(tiempo)){
+			System.out.println("Texto NO encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , en un máximo de: " + tiempo + " .seg");
+			Variables.cadena_html = Variables.cadena_html + "Texto NO encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , en un máximo de: " + tiempo + " .seg" + "|<br>";
+			valida_caso = false;
+		}
+		try{Thread.sleep(1000);}catch(Throwable e){}	//espera un segundo
+	}  
+}
+public static void func_visualizar_texto (String mapeo_objeto, String tiempo, WebDriver driver) throws InterruptedException{
+	//tiene que ser un XPATH
+try {
+	int cont=0;
+	while (driver.findElement(By.xpath(mapeo_objeto)).isDisplayed()){
+		Thread.sleep(1000);
+		cont++;
+		System.out.println("Esperando: " + cont);
+		if (cont>Integer.parseInt(tiempo)){
+			System.out.println("Texto NO visualizado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , en un máximo de: " + tiempo + " .seg");
+		    //cadena_html = cadena_html + "Texto NO visualizado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , en un máximo de: " + tiempo + " .seg" + "|<br>";
+			//valida_caso=false;
+			break;
+		}
+	}
+	System.out.println("Texto visualizado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , por un período de: " + cont + " .seg");
+	Variables.cadena_html = Variables.cadena_html + "Texto visualizado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , en un máximo de: " + cont + " .seg" + "|<br>";
+	valida_caso=true;
+}
+catch (Exception e) {
+		System.out.println(e.getMessage());
+		Thread.sleep(2000);
+}
+}
+@SuppressWarnings("null")
+public static void func_espera_elemento (String mapeo_tipo,String mapeo_objeto, String tiempo, WebDriver driver){
+    	int intentos = 0;    		
+    	if(tiempo.equalsIgnoreCase(""))
+    		tiempo="60";  	
+    	System.out.println("Inicio buscando Objeto [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    	Variables.cadena_html = Variables.cadena_html + "Inicio buscando Objeto [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    	while(true){
+    		if(mapeo_tipo != null){
+    			
+    			if(driver.getPageSource().toLowerCase().contains(mapeo_objeto.toLowerCase()))
+    			{
+    				System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+					valida_caso = true;
+    			}else
+    			{
+    				try{
+    	    			switch(mapeo_tipo.toLowerCase()){
+    	    				case "xpath":
+    	    					driver.findElement(By.xpath(mapeo_objeto));
+    	    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    	    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    	    					valida_caso = true;
+    	    					break;
+    	    				case "name":
+    	    					driver.findElement(By.name(mapeo_objeto));
+    	    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    	    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    	    					valida_caso = true;
+    	    					break;
+    	    				case "classname":
+    	    					driver.findElement(By.className(mapeo_objeto));
+    	    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    	    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    	    					valida_caso = true;
+    	    					break;
+    	    				case "css":
+    	    					driver.findElement(By.cssSelector(mapeo_objeto));
+    	    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    	    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    	    					valida_caso = true;
+    	    					break;
+    	    				case "id":
+    	    					driver.findElement(By.id(mapeo_objeto));
+    	    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    	    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    	    					valida_caso = true;
+    	    					break;
+    	    				case "text":
+    	    					driver.findElement(By.linkText(mapeo_objeto));
+    	    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    	    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    	    					valida_caso = true;
+    	    					break;
+    	    				case "parcialtext":
+    	    					driver.findElement(By.partialLinkText(mapeo_objeto));
+    	    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    	    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    	    					valida_caso = true;
+    	    					break;
+    	    				case "tagname":
+    	    					driver.findElement(By.tagName(mapeo_objeto));
+    	    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    	    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    	    					valida_caso = true; 
+    	    					break;
+    	    			}
+    	    			//return;	//el objeto ya está en la pantalla 
+        			}catch(Throwable e){
+    	    			//no ha aparecido, sigue validando
+    	    		}
+    			}
+    		}else{
+    			try{
+    				switch(mapeo_tipo.toLowerCase()){
+    				case "xpath":
+    					driver.findElement(By.xpath(mapeo_objeto));
+    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    					valida_caso = true;
+    					break;
+    				case "name":
+    					driver.findElement(By.name(mapeo_objeto));
+    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    					valida_caso = true;
+    					break;
+    				case "classname":
+    					driver.findElement(By.className(mapeo_objeto));
+    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    					valida_caso = true;
+    					break;
+    				case "css":
+    					driver.findElement(By.cssSelector(mapeo_objeto));
+    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    					valida_caso = true;
+    					break;
+    				case "id":
+    					driver.findElement(By.id(mapeo_objeto));
+    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    					valida_caso = true;
+    					break;
+    				case "text":
+    					driver.findElement(By.linkText(mapeo_objeto));
+    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    					valida_caso = true;
+    					break;
+    				case "parcialtext":
+    					driver.findElement(By.partialLinkText(mapeo_objeto));
+    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    					valida_caso = true;
+    					break;
+    				case "tagname":
+    					driver.findElement(By.tagName(mapeo_objeto));
+    					System.out.println("Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp());
+    					Variables.cadena_html = Variables.cadena_html + "Objeto encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp() + "|<br>";
+    					valida_caso = true;   
+    					break;
+    					}//return;	//el objeto ya está en la pantalla 
+            		}catch(Throwable e){
+        	    			//no ha aparecido, sigue validando
+        	    		}
+        			}
+    		if (valida_caso == true) {break;};
+    		intentos++;
+    		System.out.println ("Esperando: " + intentos);
+    		if(intentos >  Integer.parseInt(tiempo)){
+    		System.out.println("Objeto NO encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , en un máximo de: " + tiempo + " .seg");
+			Variables.cadena_html = Variables.cadena_html + "Objeto NO encontrado [" + mapeo_objeto + "]: " + getCurrentTimeStamp()+" , en un máximo de: " + tiempo + " .seg" + "|<br>";
+			valida_caso = false;
+			break;
+    		}
+    		try{Thread.sleep(1000);}catch(Throwable e){}	//espera un segundo
+    	}  
+    }
+public static String getCurrentTimeStamp() {
+    SimpleDateFormat sdfDate = new SimpleDateFormat("HH:mm:ss");//dd/MM/yyyy
+    Date now = new Date();
+    String strDate = sdfDate.format(now);
+    return strDate;
+}
+public static void func_vector (String str_paso,String file, String escenario, String version, String corrida, String i, String j) {
+	try {		
+	switch (str_paso.toUpperCase()) {
+	case "TOMAR_FOTO":
+		    Variables.cadena_html = Variables.cadena_html + str_paso + " en la pantalla<br>";
+			captura_evidencia(file, escenario,version,corrida, i , j);
+			break;
+	case "VALIDA_CASO":
+			Variables.cadena_html = Variables.cadena_html + str_paso + " en la pantalla<br>";
+			Func_Valida_Caso(escenario, i , j);
+			break;	
+	default:
+			break;
+	}	
+	valida_caso = true;
+	}
+	catch (Exception e) {
+		System.out.println(e.getMessage());
+		Variables.cadena_html = Variables.cadena_html + "<font color='#FF0000'>ERROR EN EL PASO: " + str_paso + " en la pantalla | MENSAJE ERROR: " + e.getMessage()+ "</font><br>";
+		valida_caso = false;	
+	}
+}
+public static By obtenerObjeto(String mapeo_objeto, String mapeo_tipo){
+	By by = null;
+	switch (mapeo_tipo.toUpperCase()) {
+	case "ID":
+		by= new By.ById(mapeo_objeto);
+		break;
+	case "XPATH":
+		by= new By.ByXPath(mapeo_objeto);
+		break;
+	case "NAME":
+		by= new By.ByName(mapeo_objeto);
+		break;
+	case "TEXT":
+		by= new By.ByLinkText(mapeo_objeto);
+		break;
+	case "CLASSNAME":
+		by= new By.ByClassName(mapeo_objeto);
+		break;
+	case "CSS":
+		by= new By.ByCssSelector(mapeo_objeto);
+		break;
+	}
+	 return by;
+}
+public static void Cabecera_Casos (String i) {
+	Date date_ini = new Date();
+	DateFormat hourFormat_ini = new SimpleDateFormat("HH:mm:ss");
+	hora_inicio = hourFormat_ini.format(date_ini);
+	func_descripcion_caso(i,str_escenario);
+	Variables.cadena_html="";
+	Variables.cadena_html = Variables.cadena_html + "<TR><TD>N° " + i + "</TD><TD>" + Variables.cadena_html_descripcion + "</TD><TD>[Hora inicio: " + hora_inicio + "]<br>";	
+}
+public static void func_descripcion_caso (String i, String escenario) {
+	try {
+		Variables.cadena_html_descripcion = "";
+		Rst_descripcion_caso =  Cnn.prepareCall("SELECT DESCRIPCION FROM " + escenario + "_D WHERE ID_CASO='" + i + "'").executeQuery();
+		if (Rst_descripcion_caso.next()==true){
+			Variables.cadena_html_descripcion = Rst_descripcion_caso.getString("DESCRIPCION");
+		}
+		} 
+	catch (SQLException e) {
+			e.printStackTrace();
+	}
+}
+public static void Cabecera_Pasos (String j) {
+	Variables.cadena_html = Variables.cadena_html + "'" + j + "' ";	
+}
+public static void Func_Valida_Caso (String escenario, String caso, String paso) throws IOException {
+	try {
+	Date date_fin = new Date();
+	DateFormat hourFormat_fin = new SimpleDateFormat("HH:mm:ss");
+	hora_final = hourFormat_fin.format(date_fin);
+	Thread.sleep(2000);
+	String ruta_detalle = "(DETALLE)_PRUEBAS_" + escenario + "_" + S_Version + "_" + S_Corrida + "_" + web + "_" + caso + ".html";
+	if (valida_caso == true) {
+		Variables.cadena_html = Variables.cadena_html + "[Hora Final: " + hora_final + "]<br></TD><TD><font color='#3366FF'><b><a href='"+ ruta_detalle + "'>[OK]</a></b></font><br></TD><TD>" + tiempo_caso(hora_final,hora_inicio) + "</TD></TR>";
+		Cnn.prepareStatement("UPDATE " + escenario + "_D SET RESULTADO='OK', ESTADO_EJECUCION='FINALIZADO', TIEMPO_EJECUCION='" + total_seg + "' WHERE ID_CASO='" + caso + "'").executeUpdate();
+	}
+	else {
+		Variables.cadena_html = Variables.cadena_html + "[Hora Final: " + hora_final + "]<br></TD><TD><font color='#FF0000'><b><a href='"+ ruta_detalle + "'>[ERROR]</a></b></font><br></TD><TD>" + tiempo_caso(hora_final,hora_inicio) + "</TD></TR>";
+		Cnn.prepareStatement("UPDATE " + escenario + "_D SET RESULTADO='ERROR', ESTADO_EJECUCION='FINALIZADO', TIEMPO_EJECUCION='" + total_seg + "'WHERE ID_CASO='" + caso + "'").executeUpdate();
+	}
+	captura_evidencia(file ,escenario, S_Version, S_Corrida, caso, paso);
+	}
+	catch (Exception e) {
+    	System.out.println(e.getMessage());
+        System.out.println("Fallo el valida caso");
+    }
+}
+public static String tiempo_caso (String fin, String ini) {
+	String[] h_fin  = fin.split(":");
+	String[] h_ini = ini.split(":");
+	total_seg = (long) ((Integer.valueOf(h_fin[0])*3600 + Integer.valueOf(h_fin[1])*60 + Integer.valueOf(h_fin[2])) - (Integer.valueOf(h_ini[0])*3600 + Integer.valueOf(h_ini[1])*60 + Integer.valueOf(h_ini[2])));
+	tiempo_ejecu = (total_seg/3600 + "h" + (total_seg % 3600)/60 + "m" + (total_seg % 3600) % 60 + "s").toString();
+	return tiempo_ejecu;	
+}
+public static void highlightElement(WebElement element, int i) throws InterruptedException {
+	JavascriptExecutor js = (JavascriptExecutor) driver;
+	js.executeScript("arguments[0].setAttribute('style', arguments[1]);",element, "color: green; border: 2px solid green;");
+	js.executeScript("arguments[0].setAttribute('style', arguments[1]);",element, "background-color: yellow; outline: 1px rgb(4655, 255, 136");
+	js.executeScript("arguments[0].setAttribute('style', arguments[1]);",element, "");
+}
+public static void captura_evidencia (String file , String escenario, String version, String corrida, String caso, String paso) throws IOException {
+	WebDriverWait wait = new WebDriverWait(driver, 1);	
+	String str_Tipo_Result="";
+	String Archivo="";
+	Date FechaHora = new Date();
+	if (valida_caso==true){
+		str_Tipo_Result="OK";
+	}else{
+		str_Tipo_Result="ERROR";
+	}
+	try {
+		File scrFile = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+		String VRB_Tiempo = new Date().toString().replace("/","_").replace(" ","_").replace(":","_").replace("#","");
+		Archivo = file + "CapturePNG\\" + escenario + "-" + version + "-" + corrida + "-" + caso + "-" +  paso + "_" + VRB_Tiempo + ".png";
+		FileUtils.copyFile(scrFile, new File(Archivo));
+		Cnn.prepareCall("INSERT INTO TBL_LOG_EVIDENCIA (ESCENARIO,VERSION,CORRIDA,CADENA_HTML,ID_CASO,IMAGENES,TIPO_RESULTADO,FECHA_HORA_EJECUCION) VALUES ('" + escenario + "','" + S_Version + "','" + S_Corrida + "','" + Variables.cadena_html.replaceAll("'", "") + "','" + caso + "','" + Archivo + "','" + str_Tipo_Result + "','" + FechaHora + "')").execute();
+	}
+    catch (Exception e) {
+        System.out.println("Fallo la captura de la pantalla: " + e.getMessage());
+        try {
+			Cnn.prepareCall("INSERT INTO TBL_LOG_EVIDENCIA (ESCENARIO,VERSION,CORRIDA,CADENA_HTML,ID_CASO,IMAGENES,TIPO_RESULTADO,FECHA_HORA_EJECUCION) VALUES ('" + escenario + "','" + S_Version + "','" + S_Corrida + "','" + Variables.cadena_html.replaceAll("'", "") + "','" + caso + "','" + "Sin Evidencia" + "','" + str_Tipo_Result + "','" + FechaHora + "')").execute();
+		} catch (Exception e1) {
+			System.out.println(e1.getMessage());
+		}
+        System.out.println (e.getMessage());
+        valida_caso = false;
+    }
+}
+public static void kill_procesos (String tipo_browser){
+	try {
+	switch (tipo_browser.toUpperCase()) {
+	case "CHROME":
+		Thread.sleep(2000);
+    	Runtime.getRuntime().exec("taskkill /F /IM chrome.exe");
+    	driver.quit();
+    	//Runtime.getRuntime().exec("taskkill /F /IM chromedriver.exe");
+	break;
+	case "FIREFOX":
+		Thread.sleep(2000);
+   		Runtime.getRuntime().exec("taskkill /F /IM firefox.exe");
+   		driver.quit();
+	break;
+	case "IEXPLORER":
+		Thread.sleep(2000);
+    	Runtime.getRuntime().exec("taskkill /F /IM iexplore.exe");
+    	driver.quit();
+	break;
+	}
+	}
+	catch (Exception e) {
+		try {
+		switch (tipo_browser.toUpperCase()) {
+		case "CHROME":
+			Thread.sleep(2000);
+	    	Runtime.getRuntime().exec("taskkill /F /IM chrome.exe");
+	    	driver.quit();
+	    	//Runtime.getRuntime().exec("taskkill /F /IM chromedriver.exe");
+		break;
+		case "FIREFOX":
+			Thread.sleep(2000);
+	   		Runtime.getRuntime().exec("taskkill /F /IM firefox.exe");
+	   		driver.quit();
+		break;
+		case "IEXPLORER":
+			Thread.sleep(2000);
+	    	Runtime.getRuntime().exec("taskkill /F /IM iexplore.exe");
+	    	driver.quit();
+		break;
+		}
+		}
+		catch (Exception e1){
+			System.out.println(e1.getMessage());
+		}
+    }
+}
+public static void leer_cadena_html_final (String caso, String Tipo_Resultado){
+	try {
+		Rst_Leer_Cadena_Html_Final =  Cnn.prepareCall("SELECT CADENA_HTML FROM TBL_LOG_EVIDENCIA WHERE ID_LOG IN (SELECT MAX(ID_LOG) FROM TBL_LOG_EVIDENCIA WHERE ESCENARIO='" + str_escenario + "' AND VERSION='" + S_Version + "' AND CORRIDA='" + S_Corrida + "' AND TIPO_RESULTADO='" + Tipo_Resultado + "' AND ID_CASO='" + caso+ "')").executeQuery();
+		str_Leer_Cadena_Html_Final = "";
+		if (Rst_Leer_Cadena_Html_Final.next()==true){
+			str_Leer_Cadena_Html_Final=Rst_Leer_Cadena_Html_Final.getString("CADENA_HTML");
+		}
+	} catch (SQLException e) {
+		System.out.println(e.getMessage());
+	}
+}
+@SuppressWarnings("null")
+public static void generar_evidencia_caso (String file, String escenario, String caso) throws IOException {
+	try{
+		   //Escribimos la ruta y el nombre del fichero
+		   String ruta = file;
+		   String nombre = "(DETALLE)_PRUEBAS_" + escenario + "_" + S_Version + "_" + S_Corrida + "_" + web + "_" + caso + ".html";
+		   String fecha_hora = null;		   
+		   //Creamos un objeto con los valores anteriores
+		   File archivo = new File(ruta, nombre);
+		    //Creamos el archivo en el disco
+		   archivo.createNewFile();
+		   //Creamos los objetos para escribir en el archivo creado
+		   FileWriter fw = new FileWriter(archivo);
+		   PrintWriter pw = new PrintWriter(fw);
+		   Date date = new Date();
+		   DateFormat hourdateFormat = new SimpleDateFormat("HH:mm:ss dd/MM/yyyy");		   	   
+		   pw.println("<meta http-equiv='Content-Type' content='' text/html; charset=utf-8''/>");
+		   pw.println("<html>");
+		   pw.println("<title>AUTOMATIZACION DE PRUEBAS - VECTOR SOFTWARE FACTORY</title>");
+		   pw.println("<CENTER><TABLE border='1' style='border-color: #000 #999 #999 #000' style='font-family:verdana;font-size:11'  cellpadding='5' cellspacing='0'>");
+		   pw.println("<TABLE class = 'altrowstable'>");
+	        pw.println("<TR ALIGN=CENTER><TD COLSPAN=2><IMG SRC='" + file +"logo_ch.jpg'></TD></TR>");
+	        pw.println("<TR ALIGN=CENTER><TD COLSPAN=2>EVIDENCIA PRUEBAS FUNCIONALES CASO N° " + caso +  "</CENTER></TD></TR>");
+	        pw.println("<TR><TD><b>Proyecto:</b> </TD><TD>" + str_escenario + "</TD></TR>");
+	        pw.println("<TR><TD><b>Version: </b> </TD><TD>" + S_Version + "</TD></TR>");
+	        pw.println("<TR><TD><b>Corrida: </b> </TD><TD>" + S_Corrida + "</TD></TR>");
+	        pw.println("<TR><TD><b>Hora y fecha del reporte: </b> </TD><TD>" + hourdateFormat.format(date) + "</TD></TR>");
+	        pw.println("<TR><TD><b>Responsable Automatización :</b> </TD><TD>" + S_Arquitecto_QA + "</TD></TR>");
+	        pw.println("<TR><TD><b>Descripción :</b> </TD><TD>" + Variables.cadena_html_descripcion + "</TD></TR>");
+	        pw.println("</TABLE></CENTER>");
+	        pw.println("<br><br>");      
+	        pw.println("<!-- CSS goes in the document HEAD or added to your external stylesheet -->");
+	        pw.println("<style type='text/css'>");
+	        pw.println("table.altrowstable {");
+	        pw.println(" font-family: verdana,arial,sans-serif;");
+	        pw.println(" font-size:11px;");
+	        pw.println(" color:#333333;");
+	        pw.println(" border-width: 1px;");
+	        pw.println(" border-color: #a9c6c9;");
+	        pw.println(" border-collapse: collapse;");
+	        pw.println("}");
+	        pw.println("table.altrowstable th {");
+	        pw.println(" border-width: 1px;");
+	        pw.println(" padding: 8px;");
+	        pw.println(" border-style: solid;");
+	        pw.println(" border-color: #a9c6c9;");
+	        pw.println("}");
+	        pw.println("table.altrowstable td {");
+	        pw.println(" border-width: 1px;");
+	        pw.println(" padding: 8px;");
+	        pw.println(" border-style: solid;");
+	        pw.println(" border-color: #a9c6c9;");
+	        pw.println("}");
+	        pw.println(".oddrowcolor{");
+	        pw.println(" background-color:#d4e3e5;");
+	        pw.println("}");
+	        pw.println(".evenrowcolor{");
+	        pw.println(" background-color:#c3dde0;");
+	        pw.println("}");
+	        pw.println("</style>");
+	        pw.println(" <script language='JavaScript1.2'>");
+	        pw.println("    var zoomfactor=0.5");
+	        pw.println("    function zoomhelper(){");
+	        pw.println("    whatcache.style.width=1300");
+	        pw.println("whatcache.style.height=1100");
+	        pw.println("    }");
+	        pw.println("    function zoom(originalW, originalH, what, state)");
+	        pw.println("   {");
+	        pw.println("    if (!document.all&&document.getElementById)");
+	        pw.println("    return");
+	        pw.println("    whatcache=eval('document.images.'+what)");
+	        pw.println("    prefix=(state=='in')? 1 : -1");
+	        pw.println("    if (whatcache.style.width==''''||state=='restore')");
+	        pw.println("    {");
+	        pw.println("    whatcache.style.width=originalW + 111");
+	        pw.println("    whatcache.style.height=originalH + 100");
+	        pw.println("    if (state=='restore')");
+	        pw.println("    return");
+	        pw.println("    }");
+	        pw.println("    else");
+	        pw.println("    {");
+	        pw.println("    zoomhelper()");
+	        pw.println("    }");
+	        pw.println("    beginzoom=setInterval('zoomhelper()',10)");
+	        pw.println("    }");
+	        pw.println("    function clearzoom(){");
+	        pw.println("    if (window.beginzoom)");
+	        pw.println("    clearInterval(beginzoom)");
+	        pw.println("    }");
+	        pw.println("</script>");
+	        pw.println("      <script> ");
+	        pw.println("        function MostrarTImagenes(recolocar) ");
+	        pw.println("       { ");
+	        pw.println("        for (x=1;x<document.images.length;x++) ");
+	        pw.println("            { ");
+	        pw.println("                  document.images[x].height='623' ");
+	        pw.println("                  document.images[x].width='1366' ");
+	        pw.println("            } ");
+	        pw.println("        } ");
+	        pw.println("        function ImagenesP(recolocar) ");
+	        pw.println("       { ");
+	        pw.println("        for (x=1;x<document.images.length;x++) ");
+	        pw.println("            { ");
+	        pw.println("                  document.images[x].height='310' ");
+	        pw.println("                  document.images[x].width='608' ");
+	        pw.println("            } ");
+	        pw.println("        } ");
+	        pw.println("      </script> ");
+	        pw.println("<CENTER><table class='altrowstable'>");
+	        pw.println("<TR ALIGN=CENTER><TD COLSPAN=2><b>");
+	        pw.println("<TABLE border='1'>");
+	        pw.println("<TD><a href='#' onClick='MostrarTImagenes(true);'>Ampliar Vista</a></TD>");
+	        pw.println("<TD><a href='#' onClick='ImagenesP(true);'>Vista Normal</a></TD>");
+	        pw.println("</TABLE></b></TR>");
+	        pw.println("<br><br>");
+	        pw.println("<table class='altrowstable'>");
+	        pw.println("<b><TR><TD><b>Evidencia</b></TD></TR></b>");
+	        int contador = 0;
+	        Rst_ScreenShoot_PNG = Cnn.prepareCall("SELECT IMAGENES FROM TBL_LOG_EVIDENCIA WHERE ESCENARIO='" + str_escenario + "' AND VERSION='" + S_Version + "' AND CORRIDA='" + S_Corrida + "' AND ID_CASO='" + caso + "' ORDER BY ID_LOG ASC").executeQuery();
+	        while  (Rst_ScreenShoot_PNG.next()==true){
+	        	str_ScreenShoot_PNG = Rst_ScreenShoot_PNG.getString("IMAGENES");
+	            pw.println("<TR><TD><table border='0'  cellpadding='5' cellspacing='0' valign='top'>");
+	            pw.println("<p align='center'>");         
+	            pw.println("<TD><img name='a" + contador + "' src='" + str_ScreenShoot_PNG + "' align='left' border='1' hspace='0' vspace='0' width='608' height='310'></p>");
+	            pw.println("</table>"); 
+	            contador = contador + 1;
+            }
+    		pw.println("</body>");
+    		pw.println("</html>");		   
+    		pw.close();
+    		fw.close();
+		  } catch(Exception e) {
+			  System.out.println(e.getMessage());
+			  FileInputStream pw = null;
+			pw.close();
+			  FileInputStream fw = null;
+			fw.close();
+		  }
+}
+
+@SuppressWarnings("null")
+public static void generar_reporte_evidencia(String file,String escenario) throws IOException {
+	try{
+		   //Escribimos la ruta y el nombre del fichero
+		   String ruta = file;
+		   String nombre = "EVIDENCIA_AUTOMATIZACION_PRUEBAS_" + escenario + "_" + S_Version + "_" + S_Corrida + "_" + web + ".html";
+		   String fecha_hora = null;
+		   //Creamos un objeto con los valores anteriores
+		   File archivo = new File(ruta, nombre);
+		    //Creamos el archivo en el disco
+		   archivo.createNewFile();
+		   //Creamos los objetos para escribir en el archivo creado
+		   FileWriter fw = new FileWriter(archivo);
+		   PrintWriter pw = new PrintWriter(fw);
+		   Date date = new Date();
+		   DateFormat hourdateFormat = new SimpleDateFormat("HH:mm:ss dd/MM/yyyy");		   	   
+		   pw.println("<meta http-equiv='Content-Type' content='' text/html; charset=utf-8''/>");
+		   pw.println("<html>");
+		   pw.println("<body><title>AUTOMATIZACION DE PRUEBAS - VECTOR SOFTWARE FACTORY</title>");
+		   pw.println("<CENTER><TABLE border='1' style='border-color: #000 #999 #999 #000' style='font-family:verdana;font-size:11'  cellpadding='5' cellspacing='0'>");
+		   pw.println("<TABLE class = 'altrowstable'>");
+           pw.println("<TR ALIGN=CENTER><TD COLSPAN=2><IMG SRC='" + file + "logo_ch.jpg'></TD></TR>");
+           pw.println("<TR ALIGN=CENTER><TD COLSPAN=2>EVIDENCIA PRUEBAS FUNCIONALES ITERACIÓN N° " + S_Corrida +  "</CENTER></TD></TR>");
+           pw.println("<TR><TD><b>Proyecto:</b> </TD><TD>" + str_escenario + "</TD></TR>");
+           pw.println("<TR><TD><b>Version: </b> </TD><TD>" + S_Version + "</TD></TR>");
+           pw.println("<TR><TD><b>Hora y fecha del reporte: </b> </TD><TD>" + hourdateFormat.format(date) + "</TD></TR>");
+           pw.println("<TR><TD><b>Responsable Automatización :</b> </TD><TD>" + S_Arquitecto_QA + "</TD></TR>");
+           pw.println("</TABLE></CENTER>");
+           ///////RESUMEN DE CASOS
+           func_conteo_resultados();
+           pw.println("<CENTER><TABLE border='1' style='border-color: #000 #999 #999 #000' style='font-family:verdana;font-size:11'  cellpadding='5' cellspacing='0'>");
+		   pw.println("<TABLE class = 'altrowstable'>");
+           pw.println("<TR ALIGN=center><TD COLSPAN=2><b><a name='MENU'>RESUMEN EJECUCIÓN</a></b></TD></TR>");
+           if (Rst_Total.next()==true){
+        	   pw.println("<TR><TD><b>TOTAL CASOS EJECUTADOS:</b> </TD><TD>" + Rst_Total.getString("TOTAL_CASOS") + "</TD></TR>");
+           }else{
+        	   pw.println("<TR><TD><b>TOTAL CASOS EJECUTADOS:</b> </TD><TD>" + "-" + "</TD></TR>");   
+           }
+           if (Rst_OK.next()==true){
+        	   pw.println("<TR><TD><b>TOTAL <a href='#CASOS OK'> CASOS OK</a></TD><TD>" + Rst_OK.getString("COUNT_OK") + "</b></TD></TR>"); 
+           }else{
+        	   pw.println("<TR><TD><b>TOTAL <a href='#CASOS OK'> CASOS OK</a></TD><TD>" + "0" + "</b></TD></TR>"); 
+           }
+           if (Rst_ERROR.next()==true){
+        	   pw.println("<TR><TD><b>TOTAL <a href='#CASOS ERROR'> CASOS ERROR</a></TD><TD>" + Rst_ERROR.getString("COUNT_ERROR") + "</b></TD></TR>");
+           }else{
+        	   pw.println("<TR><TD><b>TOTAL <a href='#CASOS ERROR'> CASOS ERROR</a></TD><TD>" + "0" + "</b></TD></TR>");
+           }
+           pw.println("</TABLE></CENTER>");
+           //////FIN RESUMEN CASOS
+           pw.println("<br><br>");
+           pw.println("<script type='text/javascript'>");
+           pw.println("function altRows(id){");
+           pw.println(" if(document.getElementsByTagName){  ");
+           pw.println(" var table = document.getElementById(id);  ");
+           pw.println(" var rows = table.getElementsByTagName('tr'); ");
+           pw.println(" for(i = 0; i < rows.length; i++){          ");
+           pw.println(" if(i % 2 == 0){");
+           pw.println(" rows[i].className = 'evenrowcolor';");
+           pw.println(" }else{");
+           pw.println(" rows[i].className = 'oddrowcolor';");
+           pw.println(" }      ");
+           pw.println(" }");
+           pw.println(" }");
+           pw.println("}");
+           pw.println("window.onload=function(){");
+           pw.println(" altRows('alternatecolor');");
+           pw.println("}");
+           pw.println("</script>");
+           pw.println("<!-- CSS goes in the document HEAD or added to your external stylesheet -->");
+           pw.println("<style type='text/css'>");
+           pw.println("table.altrowstable {");
+           pw.println(" font-family: verdana,arial,sans-serif;");
+           pw.println(" font-size:11px;");
+           pw.println(" color:#333333;");
+           pw.println(" border-width: 1px;");
+           pw.println(" border-color: #a9c6c9;");
+           pw.println(" border-collapse: collapse;");
+           pw.println("}");
+           pw.println("table.altrowstable th {");
+           pw.println(" border-width: 1px;");
+           pw.println(" padding: 8px;");
+           pw.println(" border-style: solid;");
+           pw.println(" border-color: #a9c6c9;");
+           pw.println("}");
+           pw.println("table.altrowstable td {");
+           pw.println(" border-width: 1px;");
+           pw.println(" padding: 8px;");
+           pw.println(" border-style: solid;");
+           pw.println(" border-color: #a9c6c9;");
+           pw.println("}");
+           pw.println(".oddrowcolor{");
+           pw.println(" background-color:#d4e3e5;");
+           pw.println("}");
+           pw.println(".evenrowcolor{");
+           pw.println(" background-color:#c3dde0;");
+           pw.println("}");
+           pw.println("</style>");           
+           pw.println("<TABLE  WIDTH='100%'><TR WIDTH='100%' > <TD WIDTH='100%' VALIGN='CENTER' ALIGN='CENTER' BGCOLOR='#5F9EA0'><H3><FONT FACE='verdana' ><a name='CASOS OK'>CASOS OK</a></FONT></H3></TD></TR></TABLE><BR>");
+           pw.println("<CENTER><table class='altrowstable'>");
+           pw.println("<b><TR><TD><b>ID. Caso</b></TD><TD><b>Descripción Caso</b></TD><TD><b>Pasos Ejecución</b></TD><TD><b>Resultado Caso</b></TD><TD><b>Tiempo</b></TD></TR></b>");
+           func_identificar_Casos_DataDriven();
+           while (Rst_Datos.next()==true){
+        	   leer_cadena_html_final(Rst_Datos.getString("ID_CASO"), "OK");
+        	   if (!str_Leer_Cadena_Html_Final.equals("")){
+        		   pw.println(str_Leer_Cadena_Html_Final);
+        	   }
+           }
+           Rst_Datos.close();
+           pw.println("<TABLE  WIDTH='100%'><TR WIDTH='100%' > <TD WIDTH='100%' VALIGN='CENTER' ALIGN='CENTER' BGCOLOR='#B22222'><H3><FONT FACE='verdana' ><a name='CASOS ERROR'>CASOS ERROR</a></FONT></H3></TD></TR></TABLE><BR>");
+           pw.println("<CENTER><table class='altrowstable'>");
+           pw.println("<b><TR><TD><b>ID. Caso</b></TD><TD><b>Descripción Caso</b></TD><TD><b>Pasos Ejecución</b></TD><TD><b>Resultado Caso</b></TD><TD><b>Tiempo</b></TD></TR></b>");
+           func_identificar_Casos_DataDriven();
+           while (Rst_Datos.next()==true){
+        	   leer_cadena_html_final(Rst_Datos.getString("ID_CASO"), "ERROR");
+        	   if (!str_Leer_Cadena_Html_Final.equals("")){
+        		   pw.println(str_Leer_Cadena_Html_Final);
+        	   }
+           }   
+		   pw.println("</table></CENTER></body>");
+		   pw.println("</html>");		   
+		   pw.close();
+		   fw.close();
+		  } catch(Exception e) {
+			  System.out.println(e.getMessage());
+			  FileInputStream pw = null;
+			pw.close();
+			  FileInputStream fw = null;
+			fw.close();
+		  }
+}
+public static void func_conteo_resultados (){
+	try {
+		Rst_Total = Cnn.prepareCall("SELECT COUNT(DISTINCT ID_CASO) AS TOTAL_CASOS FROM TBL_LOG_EVIDENCIA WHERE ESCENARIO='" + str_escenario + "' AND VERSION='" + S_Version + "' AND CORRIDA='" + S_Corrida + "'").executeQuery();
+		Rst_OK = Cnn.prepareCall("SELECT COUNT(DISTINCT(ID_CASO)) AS COUNT_OK FROM TBL_LOG_EVIDENCIA WHERE ESCENARIO='" + str_escenario + "' AND VERSION='" + S_Version + "' AND CORRIDA='" + S_Corrida + "' AND ID_CASO NOT IN (SELECT ID_CASO FROM TBL_LOG_EVIDENCIA WHERE ESCENARIO='" + str_escenario + "' AND TIPO_RESULTADO='ERROR')").executeQuery();
+		Rst_ERROR = Cnn.prepareCall("SELECT COUNT(DISTINCT(ID_CASO)) AS COUNT_ERROR FROM TBL_LOG_EVIDENCIA WHERE ESCENARIO='" + str_escenario + "' AND VERSION='" + S_Version + "' AND CORRIDA='" + S_Corrida + "' AND ID_CASO IN (SELECT ID_CASO FROM TBL_LOG_EVIDENCIA WHERE ESCENARIO='" + str_escenario + "' AND TIPO_RESULTADO='ERROR')").executeQuery();
+	} catch (SQLException e) {
+		e.printStackTrace();
+	}
+}
+public static void func_open_windows(String web, String ruta, String valor) {
+	try {	  
+		  switch (web.toUpperCase()) {
+		  	case "IEXPLORER":
+		  		File file = new File(ruta + "LibWebDriver_v2/IEDriverServer.exe");	  		
+		  		System.setProperty("webdriver.ie.driver", file.getAbsolutePath());
+		  		System.setProperty("webdriver.ie.logfile",ruta + "LibWebDriver_v2/IEDriverServer.log");
+		  		DesiredCapabilities caps = DesiredCapabilities.internetExplorer();
+		  	    caps.setCapability(InternetExplorerDriver.INTRODUCE_FLAKINESS_BY_IGNORING_SECURITY_DOMAINS,true);
+		  		driver = new InternetExplorerDriver();
+		  		driver.get(valor);
+		  		Variables.cadena_html = Variables.cadena_html + "Inicio Browser [" + web.toUpperCase() + "]" + "|<br>";
+		  		valida_caso=true;
+		  		break;
+		  	case "CHROME":
+		  		file = new File(ruta + "LibWebDriver_v2/ChromeDriver.exe");
+		  		System.setProperty("webdriver.chrome.driver", file.getAbsolutePath());
+		  		System.setProperty("webdriver.chrome.logfile", ruta + "LibWebDriver_v2/ChromeDriver.log");
+		  		ChromeOptions options = new ChromeOptions();
+		  		options.addArguments("test-type");
+		  		DesiredCapabilities capabilities = DesiredCapabilities.chrome();
+		  		capabilities.setCapability(ChromeOptions.CAPABILITY, options);
+		  		driver = new ChromeDriver(capabilities);
+		  		driver.get(valor);
+		  		Variables.cadena_html = Variables.cadena_html + "Inicio Browser [" + web.toUpperCase() + "]" + "|<br>";
+		  		valida_caso=true;
+		  		break;
+		  	case "FIREFOX":
+		  		driver = new FirefoxDriver();
+		  		driver.get(valor);
+		  		Variables.cadena_html = Variables.cadena_html + "Inicio Browser [" + web.toUpperCase() + "]" + "|<br>";
+		  		valida_caso=true;
+		  		break;
+		  default:
+			  driver = new FirefoxDriver();
+			  driver.get(valor);
+		  	  Variables.cadena_html = Variables.cadena_html + "Inicio Browser [" + web.toUpperCase() + "]" + "|<br>";
+		  	  valida_caso=true;
+		  	  break;
+		  }   
+		    //driver.manage().timeouts().implicitlyWait(1,TimeUnit.SECONDS);
+		    driver.manage().timeouts().pageLoadTimeout(60,TimeUnit.SECONDS);
+		    driver.manage().window().maximize();
+		    Thread.sleep(2000);
+		}
+		catch (Exception e) {
+			System.out.println(e.getMessage());
+			valida_caso = false;
+		}
+}
+public static void desconectar_sql() throws SQLException{
+	try
+	{	
+		try{
+			driver.quit();
+			Cnn.close();
+			Rst_Objetos.close();
+			Rst_Datos.close();
+			Rst_Pasos_Read.close();
+			Rst_Datos_Read.close();
+			Rst_descripcion_caso.close();
+			Rst_Escenarios_Pendientes.close();
+			Rst_Leer_Cadena_Html_Final.close();
+			Rst_ScreenShoot_PNG.close();
+			Rst_Total.close();
+			Rst_OK.close();
+			Rst_ERROR.close();
+		}catch(Exception e){}
+			Cnn.close();
+			Rst_Objetos.close();
+			Rst_Datos.close();
+			Rst_Pasos_Read.close();
+			Rst_Datos_Read.close();
+			Rst_descripcion_caso.close();
+			Rst_Escenarios_Pendientes.close();
+			Rst_Leer_Cadena_Html_Final.close();
+			Rst_ScreenShoot_PNG.close();
+			Rst_Total.close();
+			Rst_OK.close();
+			Rst_ERROR.close();
+	}catch(Exception e){System.out.println(e.getMessage());}	
+}
+}
+

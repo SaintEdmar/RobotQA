@@ -1,0 +1,351 @@
+package ADMIN;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+import org.apache.commons.io.FileUtils;
+import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.interactions.Actions;
+import org.openqa.selenium.support.ui.Select;
+
+import jxl.Sheet;
+import jxl.Workbook;
+import jxl.read.biff.BiffException;
+public class UtilsVector {
+public static String  cadena_html = ""; 
+public static String  cadena_html_descripcion = "";
+public static Boolean valida_caso = true;
+public static String hora_inicio = "";
+public static String hora_final = "";
+public static String tiempo_ejecu = "";
+public Workbook coneccion (String file) throws BiffException, IOException {
+	FileInputStream fi=new FileInputStream(file);
+    Workbook w=Workbook.getWorkbook(fi);
+    return w;
+}
+
+public String[] map_pasos (Workbook workbook, String str_escenario) {	
+	Sheet s = workbook.getSheet(str_escenario);
+	String[] object = new String[150];
+	for (int k = 1; k < s.getRows(); k++) {
+    	object[k] = s.getCell(3,k).getContents();
+    }
+return 	object;
+}
+public String func_object(Workbook workbook, String str_objetos, String str_escenario, String object){
+	//prueba a = new prueba();
+	int n, m;
+  	String mapeo_obj = null;
+  	String tipo_mapeo_obj = null;
+  	String STR_OBJECT = null;
+  	String posicion = null;
+	try {	
+	    Sheet s1=workbook.getSheet(str_objetos);
+	    n = 1;
+	    m = 1;			    
+	    while (s1.getCell(n,m).getContents() != "") {		    	
+	    	if (s1.getCell(n,m).getContents().toString().equals(str_escenario.toString())) {
+	    		if (s1.getCell(n+1,m).getContents().toString().equals(object.toString())) {
+	    			mapeo_obj = s1.getCell(n+2,m).getContents();
+	    			tipo_mapeo_obj = s1.getCell(n+3,m).getContents();
+	    			posicion = String.valueOf(m);
+	    			STR_OBJECT = mapeo_obj + "-" + tipo_mapeo_obj + "-" + posicion;
+	    			//a.setCadena1(mapeo_obj);
+	    			//a.setCadena2(tipo_mapeo_obj);
+	    			break;
+	    		}	
+	    	}
+	    	n = 1;
+	    	m ++;			    	
+	    }
+	    return STR_OBJECT;
+	}
+	catch (Exception e) {
+		return STR_OBJECT = "OBJECT_VECTOR" + "-" + "OBJECT_VECTOR" + "-" + "1";
+	}	
+}
+public String func_pasos(Workbook workbook, int posicion_paso, String str_escenario_P, String object){
+	int n = 1;
+	String str_tipo_paso = null;
+  	String str_paso = null;  	
+  	String str_object = null;
+  	String STR_PASOS = null;
+  	Sheet s1=workbook.getSheet(str_escenario_P); 
+  	str_object = s1.getCell(n+2,posicion_paso).getContents();
+  	str_paso = s1.getCell(n+1,posicion_paso).getContents();
+	str_tipo_paso = s1.getCell(n,posicion_paso).getContents();
+	if (str_object == "") {
+		str_object = "OBJECT_VECTOR";
+	}
+	STR_PASOS = str_tipo_paso + "-" + str_paso + "-" + str_object;
+	return STR_PASOS;
+}
+
+public Boolean keyword_Web (String str_tipo_paso, String str_object, String mapeo_objeto, String str_paso, String mapeo_tipo,  String valor, String file, String escenario, Integer i, Integer j,  WebDriver driver) {
+	try {
+	switch (str_tipo_paso.toUpperCase()) {
+	case "ACCION":
+			this.func_accion(str_object, mapeo_objeto, str_paso, mapeo_tipo, valor, driver);
+			break;
+	case "REVISION":
+			this.func_revision();
+			break;
+	case "VECTOR":
+			this.func_vector(str_paso, driver, file, escenario, i , j);
+			break;
+	default:
+			break;
+	}
+	return valida_caso;
+	}
+	catch (Exception e) {		
+		return valida_caso = false;	
+	}
+}
+
+public Boolean func_accion (String Objeto, String mapeo_objeto, String tipo_accion, String mapeo_tipo,  String valor, WebDriver driver) {
+	try {
+		highlightElement(driver, driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)), 1);//SE RESALTA EL OBJETO	
+	switch (tipo_accion.toUpperCase()) {
+	case "CLICK":
+			driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).click();
+			break;
+	case "ESCRIBIR":
+			driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).sendKeys(valor);
+			break;
+	case "DOBLECLICK":
+			WebElement ee = driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo));
+		    Actions action = new Actions(driver);
+		    action.doubleClick(ee).perform();
+			break;
+	case "LIMPIAR":
+			driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)).clear();
+			break;
+	case "SELECCIONAR":
+			Select droplist = new Select(driver.findElement(obtenerObjeto(mapeo_objeto,mapeo_tipo)));   
+			droplist.selectByVisibleText(valor);
+			break;
+	default:
+			break;
+	}
+	cadena_html = cadena_html + tipo_accion + " en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|<br>";
+	return valida_caso = true;
+	}
+	catch (Exception e) {
+		cadena_html = cadena_html + "<font color='#FF0000'>ERROR EN EL PASO: " + tipo_accion + " en el objeto " + Objeto + " con tipo de atributo |" + mapeo_tipo + "| y su valor |" + mapeo_objeto + "|</font><br>";
+		return valida_caso = false;	
+	}
+}
+public Boolean func_vector (String str_paso, WebDriver driver, String file, String escenario, Integer i, Integer j) {
+	try {		
+	switch (str_paso.toUpperCase()) {
+	case "TOMAR_FOTO":
+			this.captura_evidencia(driver, file, escenario, i , j);
+			break;
+	case "VALIDA_CASO":
+			this.Valida_Caso(driver, file, escenario, i , j);
+			break;
+	default:
+			break;
+	}
+	cadena_html = cadena_html + str_paso + " en la pantalla<br>";
+	return valida_caso;
+	}
+	catch (Exception e) {
+		cadena_html = cadena_html + "<font color='#FF0000'>ERROR EN EL PASO: " + str_paso + " en la pantalla</font><br>";
+		return valida_caso = false;	
+	}
+}
+public Boolean func_revision () {
+	return null;	
+}
+public By obtenerObjeto(String mapeo_objeto, String mapeo_tipo){
+	By by = null;
+	switch (mapeo_tipo.toUpperCase()) {
+	case "ID":
+		by= new By.ById(mapeo_objeto);
+		break;
+	case "XPATH":
+		by= new By.ByXPath(mapeo_objeto);
+		break;
+	case "NAME":
+		by= new By.ByName(mapeo_objeto);
+		break;
+	case "TEXT":
+		by= new By.ByLinkText(mapeo_objeto);
+		break;
+	case "CLASSNAME":
+		by= new By.ByClassName(mapeo_objeto);
+		break;
+	}
+	 return by;
+}
+
+public String Cabecera_Casos (Workbook workbook, int i, String escenario) {
+	Date date_ini = new Date();
+	DateFormat hourFormat_ini = new SimpleDateFormat("HH:mm:ss");
+	hora_inicio = hourFormat_ini.format(date_ini);
+	valida_caso = true;
+	cadena_html = cadena_html + "<TR><TD>N° " + i + "</TD><TD>" + Campos_Vector(workbook, i, escenario) + "</TD><TD>[Hora inicio: " + hora_inicio + "]<br>";	
+	return cadena_html;	
+}
+
+public String Campos_Vector (Workbook workbook, int i, String escenario) {
+	int n;
+	Sheet s1=workbook.getSheet(escenario);
+	if (s1.findCell("DESCRIPCION").getContents().toString().equals("DESCRIPCION")){
+		n = s1.getColumns();
+		cadena_html_descripcion = s1.getCell(n - 1, i).getContents();
+	}
+	else {
+		cadena_html_descripcion = "No se encontró descripción de caso";	
+	}
+	return cadena_html_descripcion;	
+}
+public String Cabecera_Pasos (int j) {
+	cadena_html = cadena_html + "'" + j + "' ";	
+return cadena_html;	
+}
+
+public String Valida_Caso (WebDriver driver, String file, String escenario, int caso, int paso) throws IOException {
+	Date date_fin = new Date();
+	DateFormat hourFormat_fin = new SimpleDateFormat("HH:mm:ss");
+	hora_final = hourFormat_fin.format(date_fin);
+	captura_evidencia (driver, file, escenario, caso, paso);
+	if (valida_caso == true) {
+		cadena_html = cadena_html + "[Hora Final: " + hora_final + "]<br></TD><TD><font color='#3366FF'><b><a href='#evidencias'>[OK]</a></b></font><br></TD><TD>" + tiempo_caso(hora_final,hora_inicio) + "</TD></TR>";
+	}
+	else {
+		cadena_html = cadena_html + "[Hora Final: " + hora_final + "]<br></TD><TD><font color='#FF0000'><b><a href='#evidencias'>[ERROR]</a></b></font><br></TD><TD>" + tiempo_caso(hora_final,hora_inicio) + "</TD></TR>";
+	}
+	return cadena_html;	
+}
+
+public String tiempo_caso (String ini, String fin) {
+	//strTiempoEj = CStr(TiempoEj \ 3600) & "h" & CStr((TiempoEj Mod 3600) \ 60) & "m" & CStr((TiempoEj Mod 3600) Mod 60) & "s"
+	String[] h_ini  = ini.split(":");
+	String[] h_fin = fin.split(":");
+	int total_seg;
+	total_seg = ((Integer.valueOf(h_fin[0])*60 + Integer.valueOf(h_fin[1])*60 + Integer.valueOf(h_fin[2]) - Integer.valueOf(h_ini[0])*60 + Integer.valueOf(h_ini[1])*60 + Integer.valueOf(h_ini[2])));
+	tiempo_ejecu = (total_seg/3600 + "h" + (total_seg % 3600)/60 + "m" + (total_seg % 3600) % 60 + "s").toString();
+	return tiempo_ejecu;	
+}
+public void highlightElement(WebDriver driver, WebElement element, int i) throws InterruptedException {
+	JavascriptExecutor js = (JavascriptExecutor) driver;
+	js.executeScript("arguments[0].setAttribute('style', arguments[1]);",element, "color: green; border: 2px solid green;");
+	js.executeScript("arguments[0].setAttribute('style', arguments[1]);",element, "background-color: yellow; outline: 1px rgb(4655, 255, 136");
+	js.executeScript("arguments[0].setAttribute('style', arguments[1]);",element, "");
+}
+
+public void captura_evidencia (WebDriver driver , String file , String escenario, Integer caso, Integer paso) throws IOException {
+	try{
+	File scrFile = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+	FileUtils.copyFile(scrFile, new File(file + "CaptureJPG\\" + escenario + caso + paso + ".jpeg"));
+	}
+    catch (Exception e){
+        System.out.println("Failed to capture screenshot");
+    }
+
+}
+public void generar_evidencia(String file,String escenario) throws IOException {
+	try{
+		   //Escribimos la ruta y el nombre del fichero
+		   String ruta = file;
+		   String nombre = escenario + ".html";
+		   String fecha_hora = null;
+		   //Creamos un objeto con los valores anteriores
+		   File archivo = new File(ruta, nombre);
+		    //Creamos el archivo en el disco
+		   archivo.createNewFile();
+		   //Creamos los objetos para escribir en el archivo creado
+		   FileWriter fw = new FileWriter(archivo);
+		   PrintWriter pw = new PrintWriter(fw);
+		   Date date = new Date();
+		   DateFormat hourdateFormat = new SimpleDateFormat("HH:mm:ss dd/MM/yyyy");		   	   
+		   pw.println("<meta http-equiv='Content-Type' content='' text/html; charset=utf-8''/>");
+		   pw.println("<html>");
+		   pw.println("<title>AUTOMATIZACION DE PRUEBAS - VECTOR SOFTWARE FACTORY</title>");
+		   pw.println("<CENTER><TABLE border='1' style='border-color: #000 #999 #999 #000' style='font-family:verdana;font-size:11'  cellpadding='5' cellspacing='0'>");
+		   pw.println("<TABLE class = 'altrowstable'>");
+           pw.println("<TR ALIGN=CENTER><TD COLSPAN=2><IMG SRC='logo_ch.jpg'></TD></TR>");
+           pw.println("<TR ALIGN=CENTER><TD COLSPAN=2>EVIDENCIA PRUEBAS FUNCIONALES ITERACIÓN N° " + "$CORRIDA" +  "</CENTER></TD></TR>");
+           pw.println("<TR><TD><b>Proyecto:</b> </TD><TD>" + "$PROYECTO" + "</TD></TR>");
+           pw.println("<TR><TD><b>Version: </b> </TD><TD>" + "$VERSION" + "</TD></TR>");
+           pw.println("<TR><TD><b>Fecha y hora del reporte: </b> </TD><TD>" + hourdateFormat.format(date) + "</TD></TR>");
+           pw.println("<TR><TD><b>Responsable Automatización :</b> </TD><TD>" + "$ANALISTAQA" + "</TD></TR>");
+           pw.println("</TABLE></CENTER>");
+           pw.println("<br><br>");
+           pw.println("<script type='text/javascript'>");
+           pw.println("function altRows(id){");
+           pw.println(" if(document.getElementsByTagName){  ");
+           pw.println(" var table = document.getElementById(id);  ");
+           pw.println(" var rows = table.getElementsByTagName('tr'); ");
+           pw.println(" for(i = 0; i < rows.length; i++){          ");
+           pw.println(" if(i % 2 == 0){");
+           pw.println(" rows[i].className = 'evenrowcolor';");
+           pw.println(" }else{");
+           pw.println(" rows[i].className = 'oddrowcolor';");
+           pw.println(" }      ");
+           pw.println(" }");
+           pw.println(" }");
+           pw.println("}");
+           pw.println("window.onload=function(){");
+           pw.println(" altRows('alternatecolor');");
+           pw.println("}");
+           pw.println("</script>");
+           pw.println("<!-- CSS goes in the document HEAD or added to your external stylesheet -->");
+           pw.println("<style type='text/css'>");
+           pw.println("table.altrowstable {");
+           pw.println(" font-family: verdana,arial,sans-serif;");
+           pw.println(" font-size:11px;");
+           pw.println(" color:#333333;");
+           pw.println(" border-width: 1px;");
+           pw.println(" border-color: #a9c6c9;");
+           pw.println(" border-collapse: collapse;");
+           pw.println("}");
+           pw.println("table.altrowstable th {");
+           pw.println(" border-width: 1px;");
+           pw.println(" padding: 8px;");
+           pw.println(" border-style: solid;");
+           pw.println(" border-color: #a9c6c9;");
+           pw.println("}");
+           pw.println("table.altrowstable td {");
+           pw.println(" border-width: 1px;");
+           pw.println(" padding: 8px;");
+           pw.println(" border-style: solid;");
+           pw.println(" border-color: #a9c6c9;");
+           pw.println("}");
+           pw.println(".oddrowcolor{");
+           pw.println(" background-color:#d4e3e5;");
+           pw.println("}");
+           pw.println(".evenrowcolor{");
+           pw.println(" background-color:#c3dde0;");
+           pw.println("}");
+           pw.println("</style>");          
+           pw.println("<CENTER><table class='altrowstable'>");
+           pw.println("<b><TR><TD><b>ID. Caso</b></TD><TD><b>Descripción Caso</b></TD><TD><b>Pasos Ejecución</b></TD><TD><b>Resultado Caso</b></TD><TD><b>Tiempo</b></TD></TR></b>");
+		   pw.println(cadena_html);
+		   pw.println("</CENTER></table></body>");
+		   pw.println("</html>");		   
+		   //cerramos los objetos
+		   pw.close();
+		   fw.close();
+		  } catch(Exception ex) {			  
+			  FileInputStream pw = null;
+			pw.close();
+			  FileInputStream fw = null;
+			fw.close();
+		  }
+}
+}
+

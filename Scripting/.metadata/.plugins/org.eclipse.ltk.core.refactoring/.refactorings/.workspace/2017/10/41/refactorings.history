@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Delete resource &apos;FW_VECTOR_SQL&apos;" deleteContents="false" description="Delete resource &apos;FW_VECTOR_SQL&apos;" element1="/FW_VECTOR_SQL" flags="7" id="org.eclipse.ltk.core.refactoring.delete.resources" resources="1" stamp="1507217161320"/>
+</session>
