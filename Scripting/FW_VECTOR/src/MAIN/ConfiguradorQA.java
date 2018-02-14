@@ -117,7 +117,7 @@ public class ConfiguradorQA extends JFrame {
 		txtNameDB.setColumns(10);
 		
 		txtNameServidor = new JTextField();
-		txtNameServidor.setText("VP000015");
+		txtNameServidor.setText("172.22.1.123");
 		txtNameServidor.setBounds(120, 68, 135, 20);
 		contentPane.add(txtNameServidor);
 		txtNameServidor.setColumns(10);
@@ -135,7 +135,7 @@ public class ConfiguradorQA extends JFrame {
 		txtPassWord.setColumns(10);
 		
 		textRutaEVD = new JTextField();
-		textRutaEVD.setText("\\\\VP000015\\EvidenciaQA\\");
+		textRutaEVD.setText("\\\\172.22.1.123\\EvidenciaQA\\");
 		textRutaEVD.setBounds(120, 175, 135, 20);
 		contentPane.add(textRutaEVD);
 		textRutaEVD.setColumns(10);
