@@ -111,7 +111,7 @@ public class ConfiguradorQA extends JFrame {
 		contentPane.add(lblPassword);
 		
 		txtNameDB = new JTextField();
-		txtNameDB.setText("MINI_FW");
+		txtNameDB.setText("FW_ROBOTQA");
 		txtNameDB.setBounds(120, 31, 135, 20);
 		contentPane.add(txtNameDB);
 		txtNameDB.setColumns(10);
